@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. DOMINIO: DIVISIÓN POLÍTICA (MongoDB + Bun)
+  # ==========================================
+  bd-division-politica:
+    image: mongo:7.0
+    container_name: bd_division_politica
+    restart: always
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - red-empresarial
+
+  api-division-politica:
+    build: ./DivisionPolitica_FIXED
+    container_name: api_division_politica
+    restart: always
+    ports:
+      - "3040:3030"
+    depends_on:
+      - bd-division-politica
+    networks:
+      - red-empresarial
+
+  # ==========================================
+  # 2. DOMINIO: CAMBIO MONEDAS (PostgreSQL + Node)
+  # ==========================================
+  bd-monedas:
+    image: postgres:15-alpine
+    container_name: bd_monedas
+    restart: always
+    environment:
+      # Asegúrate de que estas credenciales coincidan con el .env de CambioMonedas_Fixed
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password 
+      POSTGRES_DB: bd_monedas
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - red-empresarial
+
+  api-monedas:
+    build: ./CambioMonedas_Fixed
+    container_name: api_monedas
+    restart: always
+    ports:
+      - "8091:3000"
+    depends_on:
+      - bd-monedas
+    networks:
+      - red-empresarial
+
+  # ==========================================
+  # 3. DOMINIO: CALENDARIO LABORAL (Node autónomo)
+  # ==========================================
+  api-calendario:
+    build: ./CalendarioLaboral_FIXED
+    container_name: api_calendario
+    restart: always
+    ports:
+      - "3000:3000"
+    networks:
+      - red-empresarial
+
+# ==========================================
+# GESTIÓN DE VOLÚMENES Y REDES
+# ==========================================
+volumes:
+  mongo-data:
+  postgres-data:
+
+networks:
+  red-empresarial:
+    driver: bridge
