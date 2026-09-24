@@ -1,19 +1,20 @@
-version: '3.8'
-
 services:
   # ==========================================
-  # 1. DOMINIO: DIVISIÓN POLÍTICA (MongoDB + Bun)
+  # ZONA: DIVISIÓN POLÍTICA (MongoDB)
   # ==========================================
   bd-division-politica:
     image: mongo:7.0
     container_name: bd_division_politica
     restart: always
-    ports:
-      - "27018:27017"
     volumes:
       - mongo-data:/data/db
     networks:
       - red-empresarial
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   api-division-politica:
     build: ./DivisionPolitica_FIXED
@@ -21,29 +22,35 @@ services:
     restart: always
     ports:
       - "3040:3030"
+    environment:
+      - MONGO_URI=mongodb://bd-division-politica:27017/division_politica
     depends_on:
-      - bd-division-politica
+      bd-division-politica:
+        condition: service_healthy
     networks:
       - red-empresarial
 
   # ==========================================
-  # 2. DOMINIO: CAMBIO MONEDAS (PostgreSQL + Node)
+  # ZONA: CAMBIO MONEDAS (PostgreSQL)
   # ==========================================
   bd-monedas:
-    image: postgres:15-alpine
+    image: postgres:15
     container_name: bd_monedas
     restart: always
     environment:
-      # Asegúrate de que estas credenciales coincidan con el .env de CambioMonedas_Fixed
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password 
-      POSTGRES_DB: bd_monedas
-    ports:
-      - "5433:5432"
+      - POSTGRES_USER=${PG_USER}
+      - POSTGRES_PASSWORD=${PG_PASS}
+      - POSTGRES_DB=${PG_DB}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - red-empresarial
+    healthcheck:
+      # Adaptado para leer dinámicamente las variables de tu archivo .env
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   api-monedas:
     build: ./CambioMonedas_Fixed
@@ -51,13 +58,16 @@ services:
     restart: always
     ports:
       - "8091:3000"
+    environment:
+      - DATABASE_URL=postgresql://${PG_USER}:${PG_PASS}@bd-monedas:5432/${PG_DB}
     depends_on:
-      - bd-monedas
+      bd-monedas:
+        condition: service_healthy
     networks:
       - red-empresarial
 
   # ==========================================
-  # 3. DOMINIO: CALENDARIO LABORAL (Node autónomo)
+  # ZONA: CALENDARIO LABORAL (Independiente)
   # ==========================================
   api-calendario:
     build: ./CalendarioLaboral_FIXED
@@ -68,13 +78,10 @@ services:
     networks:
       - red-empresarial
 
-# ==========================================
-# GESTIÓN DE VOLÚMENES Y REDES
-# ==========================================
-volumes:
-  mongo-data:
-  postgres-data:
-
 networks:
   red-empresarial:
     driver: bridge
+
+volumes:
+  mongo-data:
+  postgres-data:
